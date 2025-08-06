@@ -215,7 +215,6 @@ def _display_deadline_based_analysis(tasks, response_times, schedulable):
     # Display table
     print("\n" + "="*120)
     print("DEADLINE-BASED RESPONSE TIME ANALYSIS")
-    print("Formula: R_i = C_i + Σ(h=1 to i-1) ⌈D_i/T_h⌉ × C_h")
     print("="*120)
     
     # Display main table without interference formula for cleaner view
