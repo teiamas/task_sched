@@ -60,3 +60,9 @@ Thumbs.db
 # Project specific
 task_set_*
 rm_schedule*.png
+
+# Test output
+test_improved_ticks.png
+# cache dirs
+.ipynb_checkpoints
+__pycache__

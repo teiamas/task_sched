@@ -62,8 +62,29 @@ def plot_rm_schedule(tasks, lcm_cycles=1, filename=None, algorithm='DM'):
     # Plot schedule with timeline-based visualization
     fig, ax = plt.subplots(figsize=(16, 8))  # Increased height for better readability
     
-    # Define colors similar to reference image
-    task_colors = ['#4ECDC4', '#FF6B6B', '#FFD700']  # Teal, Red, Yellow to match reference order
+    # Define an extended color palette for many tasks
+    task_colors = [
+        '#4ECDC4',  # Teal
+        '#FF6B6B',  # Red
+        '#FFD700',  # Yellow
+        '#95E1D3',  # Mint
+        '#F38BA8',  # Pink
+        '#A8DADC',  # Light Blue
+        '#457B9D',  # Steel Blue
+        '#1D3557',  # Navy
+        '#F1FAEE',  # Off White
+        '#E63946',  # Red variant
+        '#2A9D8F',  # Teal variant
+        '#E9C46A',  # Yellow variant
+        '#F4A261',  # Orange
+        '#E76F51',  # Orange Red
+        '#264653',  # Dark Green
+        '#287271',  # Dark Teal
+        '#F77F00',  # Orange variant
+        '#FCBF49',  # Light Orange
+        '#003049',  # Dark Blue
+        '#669BBC'   # Blue variant
+    ]
     
     # Create timeline visualization
     y_positions = []
@@ -121,23 +142,38 @@ def plot_rm_schedule(tasks, lcm_cycles=1, filename=None, algorithm='DM'):
                         ax.plot([deadline_time, deadline_time], [y_pos - 0.4, y_pos + 0.4], 
                                color='red', linewidth=2, solid_capstyle='butt')
         
-        # Plot execution blocks
+        # Plot execution blocks with color cycling and pattern support
         start_time = None
         for t in range(time_range):
             if execution_timeline[t] == task:
                 if start_time is None:
                     start_time = t
             elif start_time is not None:
+                # Get color for this task (cycle through available colors)
+                color = task_colors[i % len(task_colors)]
+                # Add hatching pattern for tasks beyond the base color set to improve distinction
+                hatch_pattern = None
+                if i >= len(task_colors):
+                    # Use different hatch patterns for tasks that repeat colors
+                    hatch_patterns = ['///', '\\\\\\', '|||', '---', '+++', 'xxx', 'ooo', '...']
+                    hatch_pattern = hatch_patterns[(i // len(task_colors)) % len(hatch_patterns)]
+                
                 # Execution block
                 ax.barh(y_pos, t - start_time, left=start_time,
-                       height=0.6, color=task_colors[i % len(task_colors)], 
+                       height=0.6, color=color, hatch=hatch_pattern,
                        alpha=0.9, edgecolor='black', linewidth=0.5)
                 start_time = None
         
         # Handle case where task runs until the end
         if start_time is not None:
+            color = task_colors[i % len(task_colors)]
+            hatch_pattern = None
+            if i >= len(task_colors):
+                hatch_patterns = ['///', '\\\\\\', '|||', '---', '+++', 'xxx', 'ooo', '...']
+                hatch_pattern = hatch_patterns[(i // len(task_colors)) % len(hatch_patterns)]
+            
             ax.barh(y_pos, time_range - start_time, left=start_time,
-                   height=0.6, color=task_colors[i % len(task_colors)], 
+                   height=0.6, color=color, hatch=hatch_pattern,
                    alpha=0.9, edgecolor='black', linewidth=0.5)
     
     # Add processor timeline at bottom
@@ -145,12 +181,18 @@ def plot_rm_schedule(tasks, lcm_cycles=1, filename=None, algorithm='DM'):
     ax.barh(proc_y_pos, time_range, left=0, height=0.8, 
             color='lightgray', edgecolor='black', linewidth=1)
     
-    # Create processor execution timeline
+    # Create processor execution timeline with improved color distinction
     for t in range(time_range):
         if execution_timeline[t] is not None:
             task_idx = tasks.index(execution_timeline[t])
+            color = task_colors[task_idx % len(task_colors)]
+            hatch_pattern = None
+            if task_idx >= len(task_colors):
+                hatch_patterns = ['///', '\\\\\\', '|||', '---', '+++', 'xxx', 'ooo', '...']
+                hatch_pattern = hatch_patterns[(task_idx // len(task_colors)) % len(hatch_patterns)]
+            
             ax.barh(proc_y_pos, 1, left=t, height=0.6, 
-                   color=task_colors[task_idx % len(task_colors)], 
+                   color=color, hatch=hatch_pattern,
                    alpha=0.9, edgecolor='black', linewidth=0.3)
     
     # Customize the plot
@@ -170,8 +212,18 @@ def plot_rm_schedule(tasks, lcm_cycles=1, filename=None, algorithm='DM'):
     ax.set_ylim(0, len(tasks) + 3.5)
     
     # Create custom time ticks with better spacing to avoid overlap
-    # Reduce the number of regular ticks based on time range
-    tick_interval = max(2, time_range // 15)  # Ensure reasonable spacing
+    # Adaptive tick interval based on time range and figure width
+    if time_range <= 30:
+        tick_interval = 2
+    elif time_range <= 60:
+        tick_interval = 4
+    elif time_range <= 120:
+        tick_interval = 6
+    elif time_range <= 240:
+        tick_interval = 10
+    else:
+        tick_interval = max(10, time_range // 20)  # Ensure reasonable spacing for very long ranges
+    
     regular_ticks = np.arange(0, time_range + 1, tick_interval)
     period_ticks = sorted(list(all_periods))
     deadline_ticks = sorted(list(all_deadlines))
@@ -187,16 +239,32 @@ def plot_rm_schedule(tasks, lcm_cycles=1, filename=None, algorithm='DM'):
     important_ticks = set(period_ticks) | set(deadline_ticks)
     all_ticks = sorted(list(set(regular_ticks) | important_ticks))
     
-    # Filter out regular ticks that are too close to important ticks
+    # Intelligent filtering to prevent overlapping labels
     filtered_ticks = []
+    min_spacing = max(3, time_range // 30)  # Minimum spacing between ticks
+    
     for tick in all_ticks:
         if tick in important_ticks:
-            filtered_ticks.append(tick)
-        else:
-            # Only add regular tick if it's not too close to important ticks
-            min_distance = min([abs(tick - imp_tick) for imp_tick in important_ticks] + [float('inf')])
-            if min_distance >= tick_interval * 0.8:
+            # Always include important ticks (periods/deadlines) but check spacing
+            if not filtered_ticks or abs(tick - filtered_ticks[-1]) >= min_spacing:
                 filtered_ticks.append(tick)
+            elif tick == 0 or tick == time_range:
+                # Always include start and end points
+                filtered_ticks.append(tick)
+        else:
+            # For regular ticks, ensure minimum spacing from any existing tick
+            if not filtered_ticks or min([abs(tick - existing) for existing in filtered_ticks]) >= min_spacing:
+                filtered_ticks.append(tick)
+    
+    # Ensure we don't have too many ticks (max 25 ticks for readability)
+    if len(filtered_ticks) > 25:
+        # Keep every nth tick, but always keep important ones
+        step = len(filtered_ticks) // 20
+        final_ticks = []
+        for i, tick in enumerate(filtered_ticks):
+            if i % step == 0 or tick in important_ticks or tick == 0 or tick == time_range:
+                final_ticks.append(tick)
+        filtered_ticks = sorted(list(set(final_ticks)))
     
     ax.set_xticks(filtered_ticks)
     
@@ -222,7 +290,7 @@ def plot_rm_schedule(tasks, lcm_cycles=1, filename=None, algorithm='DM'):
             # Regular tick - black
             tick_colors.append('black')
     
-    ax.set_xticklabels(tick_labels, fontsize=10)
+    ax.set_xticklabels(tick_labels, fontsize=9, rotation=45 if len(filtered_ticks) > 15 else 0)  # Rotate labels if many ticks
     
     # Color individual tick labels
     for tick_label, color in zip(ax.get_xticklabels(), tick_colors):
@@ -301,8 +369,29 @@ def plot_rm_schedule_inline(tasks, lcm_cycles=1, algorithm='DM'):
     # Plot schedule with timeline-based visualization
     fig, ax = plt.subplots(figsize=(16, 8))
     
-    # Define colors
-    task_colors = ['#4ECDC4', '#FF6B6B', '#FFD700']
+    # Define an extended color palette for many tasks
+    task_colors = [
+        '#4ECDC4',  # Teal
+        '#FF6B6B',  # Red
+        '#FFD700',  # Yellow
+        '#95E1D3',  # Mint
+        '#F38BA8',  # Pink
+        '#A8DADC',  # Light Blue
+        '#457B9D',  # Steel Blue
+        '#1D3557',  # Navy
+        '#F1FAEE',  # Off White
+        '#E63946',  # Red variant
+        '#2A9D8F',  # Teal variant
+        '#E9C46A',  # Yellow variant
+        '#F4A261',  # Orange
+        '#E76F51',  # Orange Red
+        '#264653',  # Dark Green
+        '#287271',  # Dark Teal
+        '#F77F00',  # Orange variant
+        '#FCBF49',  # Light Orange
+        '#003049',  # Dark Blue
+        '#669BBC'   # Blue variant
+    ]
     
     # Create timeline visualization
     y_positions = []
@@ -354,21 +443,36 @@ def plot_rm_schedule_inline(tasks, lcm_cycles=1, algorithm='DM'):
                         ax.plot([deadline_time, deadline_time], [y_pos - 0.4, y_pos + 0.4], 
                                color='red', linewidth=2, solid_capstyle='butt')
         
-        # Plot execution blocks
+        # Plot execution blocks with color cycling and pattern support
         start_time = None
         for t in range(time_range):
             if execution_timeline[t] == task:
                 if start_time is None:
                     start_time = t
             elif start_time is not None:
+                # Get color for this task (cycle through available colors)
+                color = task_colors[i % len(task_colors)]
+                # Add hatching pattern for tasks beyond the base color set to improve distinction
+                hatch_pattern = None
+                if i >= len(task_colors):
+                    # Use different hatch patterns for tasks that repeat colors
+                    hatch_patterns = ['///', '\\\\\\', '|||', '---', '+++', 'xxx', 'ooo', '...']
+                    hatch_pattern = hatch_patterns[(i // len(task_colors)) % len(hatch_patterns)]
+                
                 ax.barh(y_pos, t - start_time, left=start_time,
-                       height=0.6, color=task_colors[i % len(task_colors)], 
+                       height=0.6, color=color, hatch=hatch_pattern,
                        alpha=0.9, edgecolor='black', linewidth=0.5)
                 start_time = None
         
         if start_time is not None:
+            color = task_colors[i % len(task_colors)]
+            hatch_pattern = None
+            if i >= len(task_colors):
+                hatch_patterns = ['///', '\\\\\\', '|||', '---', '+++', 'xxx', 'ooo', '...']
+                hatch_pattern = hatch_patterns[(i // len(task_colors)) % len(hatch_patterns)]
+            
             ax.barh(y_pos, time_range - start_time, left=start_time,
-                   height=0.6, color=task_colors[i % len(task_colors)], 
+                   height=0.6, color=color, hatch=hatch_pattern,
                    alpha=0.9, edgecolor='black', linewidth=0.5)
     
     # Add processor timeline
@@ -376,11 +480,18 @@ def plot_rm_schedule_inline(tasks, lcm_cycles=1, algorithm='DM'):
     ax.barh(proc_y_pos, time_range, left=0, height=0.8, 
             color='lightgray', edgecolor='black', linewidth=1)
     
+    # Create processor execution timeline with improved color distinction
     for t in range(time_range):
         if execution_timeline[t] is not None:
             task_idx = tasks.index(execution_timeline[t])
+            color = task_colors[task_idx % len(task_colors)]
+            hatch_pattern = None
+            if task_idx >= len(task_colors):
+                hatch_patterns = ['///', '\\\\\\', '|||', '---', '+++', 'xxx', 'ooo', '...']
+                hatch_pattern = hatch_patterns[(task_idx // len(task_colors)) % len(hatch_patterns)]
+            
             ax.barh(proc_y_pos, 1, left=t, height=0.6, 
-                   color=task_colors[task_idx % len(task_colors)], 
+                   color=color, hatch=hatch_pattern,
                    alpha=0.9, edgecolor='black', linewidth=0.3)
     
     # Customize plot
@@ -395,9 +506,89 @@ def plot_rm_schedule_inline(tasks, lcm_cycles=1, algorithm='DM'):
     ax.set_yticks(label_positions)
     ax.set_yticklabels(all_labels, fontsize=9, ha='left', va='bottom')
     
-    # Set limits and grid
+    # Set limits and grid with adaptive tick spacing
     ax.set_xlim(0, time_range)
     ax.set_ylim(0, len(tasks) + 3.5)
+    
+    # Create adaptive time ticks to prevent overlapping labels
+    if time_range <= 30:
+        tick_interval = 2
+    elif time_range <= 60:
+        tick_interval = 4
+    elif time_range <= 120:
+        tick_interval = 6
+    elif time_range <= 240:
+        tick_interval = 10
+    else:
+        tick_interval = max(10, time_range // 20)
+    
+    # Generate ticks with intelligent spacing
+    regular_ticks = np.arange(0, time_range + 1, tick_interval)
+    period_ticks = sorted(list(all_periods))
+    deadline_ticks = sorted(list(all_deadlines))
+    
+    # Combine and filter ticks
+    important_ticks = set(period_ticks) | set(deadline_ticks)
+    all_ticks = sorted(list(set(regular_ticks) | important_ticks))
+    
+    # Filter for readability
+    filtered_ticks = []
+    min_spacing = max(3, time_range // 30)
+    
+    for tick in all_ticks:
+        if tick in important_ticks:
+            if not filtered_ticks or abs(tick - filtered_ticks[-1]) >= min_spacing:
+                filtered_ticks.append(tick)
+            elif tick == 0 or tick == time_range:
+                filtered_ticks.append(tick)
+        else:
+            if not filtered_ticks or min([abs(tick - existing) for existing in filtered_ticks]) >= min_spacing:
+                filtered_ticks.append(tick)
+    
+    # Limit total number of ticks
+    if len(filtered_ticks) > 25:
+        step = len(filtered_ticks) // 20
+        final_ticks = []
+        for i, tick in enumerate(filtered_ticks):
+            if i % step == 0 or tick in important_ticks or tick == 0 or tick == time_range:
+                final_ticks.append(tick)
+        filtered_ticks = sorted(list(set(final_ticks)))
+    
+    ax.set_xticks(filtered_ticks)
+    
+    # Color tick labels appropriately
+    tick_labels = []
+    tick_colors = []
+    
+    # Determine period equals deadline set
+    period_equals_deadline = set()
+    for task in tasks:
+        if task.deadline == task.period:
+            period_releases = np.arange(0, time_range + 1, task.period)
+            period_equals_deadline.update(period_releases)
+    
+    for tick in filtered_ticks:
+        tick_labels.append(f"{int(tick)}")
+        
+        if tick in period_equals_deadline:
+            tick_colors.append('red')
+        elif tick in deadline_ticks and tick in period_ticks:
+            tick_colors.append('red')
+        elif tick in deadline_ticks:
+            tick_colors.append('red')
+        elif tick in period_ticks:
+            tick_colors.append('blue')
+        else:
+            tick_colors.append('black')
+    
+    ax.set_xticklabels(tick_labels, fontsize=9, rotation=45 if len(filtered_ticks) > 15 else 0)  # Rotate if many ticks
+    
+    # Color individual tick labels
+    for tick_label, color in zip(ax.get_xticklabels(), tick_colors):
+        tick_label.set_color(color)
+        if color in ['red', 'blue']:
+            tick_label.set_fontweight('bold')
+    
     ax.grid(True, alpha=0.4, axis='x', which='major', linestyle='-', linewidth=0.5)
     
     # Style axes
@@ -410,6 +601,28 @@ def plot_rm_schedule_inline(tasks, lcm_cycles=1, algorithm='DM'):
     plt.tight_layout()
     plt.show()
     return fig
+
+def create_test_task_set(num_tasks, base_period=6):
+    """
+    Create a test task set with the specified number of tasks.
+    
+    Args:
+        num_tasks: Number of tasks to create
+        base_period: Base period for the first task (others will be multiples)
+    
+    Returns:
+        List of Task objects
+    """
+    tasks = []
+    for i in range(num_tasks):
+        period = base_period + (i * 4)  # Periods: 6, 10, 14, 18, 22, ...
+        deadline = period - 1           # Deadline is one less than period
+        execution_time = max(1, period // 6)  # Execution time scales with period
+        
+        task = rtm.Task(period=period, deadline=deadline, execution_time=execution_time)
+        tasks.append(task)
+    
+    return tasks
 
 def main():
     # Define Task Sets with Progressive Difficulty (D ≠ T)
@@ -435,9 +648,21 @@ def main():
         rtm.Task(period=14, deadline=10, execution_time=4),   # D < T, Tight deadline
         rtm.Task(period=21, deadline=15, execution_time=6)    # D < T, Tight deadline
     ]
-    plot_rm_schedule(tasks=task_set_1,lcm_cycles=1,filename="task_set_1")  
-    plot_rm_schedule(tasks=task_set_2,lcm_cycles=1,filename="task_set_2")  
-    plot_rm_schedule(tasks=task_set_3,lcm_cycles=1,filename="task_set_3")  
+    
+    # Task Set 4: Extended case with 6 tasks to test color cycling and patterns
+    task_set_extended = [
+        rtm.Task(period=6,  deadline=5,  execution_time=1),   # Task 1
+        rtm.Task(period=8,  deadline=7,  execution_time=1),   # Task 2
+        rtm.Task(period=12, deadline=10, execution_time=2),   # Task 3
+        rtm.Task(period=16, deadline=14, execution_time=2),   # Task 4
+        rtm.Task(period=20, deadline=18, execution_time=3),   # Task 5
+        rtm.Task(period=24, deadline=22, execution_time=3)    # Task 6
+    ]
+    
+    plot_rm_schedule(tasks=task_set_1, lcm_cycles=1, filename="task_set_1")  
+    plot_rm_schedule(tasks=task_set_2, lcm_cycles=1, filename="task_set_2")  
+    plot_rm_schedule(tasks=task_set_3, lcm_cycles=1, filename="task_set_3")
+    plot_rm_schedule(tasks=task_set_extended, lcm_cycles=1, filename="task_set_extended")
     
     # Example of using custom filename
     # plot_rm_schedule(task_set_1, filename="custom_schedule.png")
