@@ -58,11 +58,16 @@ ehthumbs.db
 Thumbs.db
 
 # Project specific
+output/
 task_set_*
 rm_schedule*.png
 
 # Test output
 test_improved_ticks.png
+test_*.py
+test_*.png
+Untitled*.ipynb
+
 # cache dirs
 .ipynb_checkpoints
 __pycache__

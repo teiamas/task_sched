@@ -1,14 +1,15 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import rate_monotonic as rtm
+import os
 
-def plot_rm_schedule(tasks, lcm_cycles=1, filename=None, algorithm='DM'):
-    # Generate default filename based on task set characteristics if none provided
-    if filename is None:
-        periods = [task.period for task in tasks]
-        periods_str = "_".join(map(str, sorted(periods)))
-        filename = f"rm_schedule_tasks_{periods_str}.png"
+def _generate_schedule_data(tasks, lcm_cycles=1, algorithm='DM'):
+    """
+    Generate scheduling data and plot elements for both inline and file output functions.
     
+    Returns:
+        tuple: (execution_timeline, tasks_sorted, time_range, title, all_periods, all_deadlines, task_colors)
+    """
     # Calculate LCM of all periods
     lcm = np.lcm.reduce([task.period for task in tasks])
     time_range = lcm * lcm_cycles
@@ -16,14 +17,12 @@ def plot_rm_schedule(tasks, lcm_cycles=1, filename=None, algorithm='DM'):
     # Sort tasks by priority based on algorithm
     if algorithm == 'DM':
         # Deadline Monotonic - shorter deadline = higher priority
-        tasks = sorted(tasks, key=lambda x: x.deadline)
+        tasks_sorted = sorted(tasks, key=lambda x: x.deadline)
         title = 'Deadline Monotonic Preemptive Schedule'
-        priority_key = 'deadline'
     else:
         # Rate Monotonic - shorter period = higher priority
-        tasks = sorted(tasks, key=lambda x: x.period)
+        tasks_sorted = sorted(tasks, key=lambda x: x.period)
         title = 'Rate Monotonic Preemptive Schedule'
-        priority_key = 'period'
     
     # Create execution timeline
     execution_timeline = [None] * time_range
@@ -34,7 +33,7 @@ def plot_rm_schedule(tasks, lcm_cycles=1, filename=None, algorithm='DM'):
     # Simulate schedule
     for t in range(time_range):
         # Add new task releases
-        for task in tasks:
+        for task in tasks_sorted:
             if t % task.period == 0:
                 active_tasks.append({
                     'task': task,
@@ -58,9 +57,6 @@ def plot_rm_schedule(tasks, lcm_cycles=1, filename=None, algorithm='DM'):
             executing_task = active_tasks[0]
             execution_timeline[t] = executing_task['task']
             executing_task['remaining'] -= 1
-    
-    # Plot schedule with timeline-based visualization
-    fig, ax = plt.subplots(figsize=(16, 8))  # Increased height for better readability
     
     # Define an extended color palette for many tasks
     task_colors = [
@@ -86,15 +82,11 @@ def plot_rm_schedule(tasks, lcm_cycles=1, filename=None, algorithm='DM'):
         '#669BBC'   # Blue variant
     ]
     
-    # Create timeline visualization
-    y_positions = []
-    task_labels = []
-    
     # Collect all period and deadline releases for colored tick marks
     all_periods = set()
     all_deadlines = set()
     
-    for task in tasks:
+    for task in tasks_sorted:
         # Collect period releases
         period_releases = np.arange(0, time_range + 1, task.period)
         all_periods.update(period_releases)
@@ -104,6 +96,22 @@ def plot_rm_schedule(tasks, lcm_cycles=1, filename=None, algorithm='DM'):
             deadline_time = release_time + task.deadline
             if deadline_time <= time_range:
                 all_deadlines.add(deadline_time)
+    
+    return execution_timeline, tasks_sorted, time_range, title, all_periods, all_deadlines, task_colors
+
+def _create_plot(execution_timeline, tasks, time_range, title, all_periods, all_deadlines, task_colors, algorithm='DM'):
+    """
+    Create the actual matplotlib plot with all the visualization elements.
+    
+    Returns:
+        tuple: (fig, ax) - matplotlib figure and axes objects
+    """
+    # Plot schedule with timeline-based visualization
+    fig, ax = plt.subplots(figsize=(16, 8))  # Increased height for better readability
+    
+    # Create timeline visualization
+    y_positions = []
+    task_labels = []
     
     # Plot each task on its own timeline
     for i, task in enumerate(tasks):
@@ -203,7 +211,7 @@ def plot_rm_schedule(tasks, lcm_cycles=1, filename=None, algorithm='DM'):
     # Position y-axis labels at the top of the plot
     top_y_position = len(tasks) + 2.5  # Position at top of plot
     label_positions = [top_y_position + (i * 0.25) for i in range(len(task_labels))] + [top_y_position + (len(task_labels) * 0.25)]
-    all_labels = task_labels + ["Processor: DEADLINE_MONOTONIC_PROTOCOL, PREEMPTIVE"]
+    all_labels = task_labels + [f"Processor: {algorithm}_PROTOCOL, PREEMPTIVE"]
     ax.set_yticks(label_positions)
     ax.set_yticklabels(all_labels, fontsize=9, ha='left', va='bottom')
     
@@ -308,7 +316,47 @@ def plot_rm_schedule(tasks, lcm_cycles=1, filename=None, algorithm='DM'):
     ax.spines['right'].set_visible(False)
     ax.xaxis.set_ticks_position('bottom')
     
+    return fig, ax
+
+def plot_rm_schedule(tasks, lcm_cycles=1, filename=None, algorithm='DM', output_dir='output'):
+    """
+    Generate and save a scheduling plot to file.
+    
+    Args:
+        tasks: List of Task objects
+        lcm_cycles: Number of LCM cycles to simulate
+        filename: Custom filename (without path). If None, auto-generates based on task periods
+        algorithm: 'DM' for Deadline Monotonic or 'RM' for Rate Monotonic
+        output_dir: Directory to save output files (default: 'output')
+    """
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Generate default filename based on task set characteristics if none provided
+    if filename is None:
+        periods = [task.period for task in tasks]
+        periods_str = "_".join(map(str, sorted(periods)))
+        filename = f"rm_schedule_tasks_{periods_str}.png"
+    
+    # Ensure filename has .png extension
+    if not filename.endswith('.png'):
+        filename += '.png'
+    
+    # Combine output directory with filename
+    full_path = os.path.join(output_dir, filename)
+    
+    # Generate scheduling data
+    execution_timeline, tasks_sorted, time_range, title, all_periods, all_deadlines, task_colors = _generate_schedule_data(tasks, lcm_cycles, algorithm)
+    
+    # Create the plot
+    fig, ax = _create_plot(execution_timeline, tasks_sorted, time_range, title, all_periods, all_deadlines, task_colors, algorithm)
+    
     plt.tight_layout()
+    plt.savefig(full_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    
+    print(f"Plot saved to: {full_path}")
+    return full_path
     plt.savefig(filename, dpi=150, bbox_inches='tight')
     plt.close()
 
@@ -320,283 +368,11 @@ def plot_rm_schedule_inline(tasks, lcm_cycles=1, algorithm='DM'):
     # Clear any existing plots
     plt.close('all')
     
-    # Calculate LCM of all periods
-    lcm = np.lcm.reduce([task.period for task in tasks])
-    time_range = lcm * lcm_cycles
+    # Generate scheduling data
+    execution_timeline, tasks_sorted, time_range, title, all_periods, all_deadlines, task_colors = _generate_schedule_data(tasks, lcm_cycles, algorithm)
     
-    # Sort tasks by priority based on algorithm
-    if algorithm == 'DM':
-        # Deadline Monotonic - shorter deadline = higher priority
-        tasks = sorted(tasks, key=lambda x: x.deadline)
-        title = 'Deadline Monotonic Preemptive Schedule'
-    else:
-        # Rate Monotonic - shorter period = higher priority
-        tasks = sorted(tasks, key=lambda x: x.period)
-        title = 'Rate Monotonic Preemptive Schedule'
-    
-    # Create execution timeline
-    execution_timeline = [None] * time_range
-    
-    # Track active task instances
-    active_tasks = []
-    
-    # Simulate schedule
-    for t in range(time_range):
-        # Add new task releases
-        for task in tasks:
-            if t % task.period == 0:
-                active_tasks.append({
-                    'task': task,
-                    'remaining': task.execution_time,
-                    'release_time': t
-                })
-        
-        # Remove completed tasks
-        active_tasks = [task_info for task_info in active_tasks if task_info['remaining'] > 0]
-        
-        # Sort by priority based on algorithm
-        if algorithm == 'DM':
-            active_tasks.sort(key=lambda x: x['task'].deadline)
-        else:
-            active_tasks.sort(key=lambda x: x['task'].period)
-        
-        # Execute highest priority task with remaining execution time
-        if active_tasks:
-            executing_task = active_tasks[0]
-            execution_timeline[t] = executing_task['task']
-            executing_task['remaining'] -= 1
-    
-    # Plot schedule with timeline-based visualization
-    fig, ax = plt.subplots(figsize=(16, 8))
-    
-    # Define an extended color palette for many tasks
-    task_colors = [
-        '#4ECDC4',  # Teal
-        '#FF6B6B',  # Red
-        '#FFD700',  # Yellow
-        '#95E1D3',  # Mint
-        '#F38BA8',  # Pink
-        '#A8DADC',  # Light Blue
-        '#457B9D',  # Steel Blue
-        '#1D3557',  # Navy
-        '#F1FAEE',  # Off White
-        '#E63946',  # Red variant
-        '#2A9D8F',  # Teal variant
-        '#E9C46A',  # Yellow variant
-        '#F4A261',  # Orange
-        '#E76F51',  # Orange Red
-        '#264653',  # Dark Green
-        '#287271',  # Dark Teal
-        '#F77F00',  # Orange variant
-        '#FCBF49',  # Light Orange
-        '#003049',  # Dark Blue
-        '#669BBC'   # Blue variant
-    ]
-    
-    # Create timeline visualization
-    y_positions = []
-    task_labels = []
-    
-    # Collect all period and deadline releases for colored tick marks
-    all_periods = set()
-    all_deadlines = set()
-    
-    for task in tasks:
-        period_releases = np.arange(0, time_range + 1, task.period)
-        all_periods.update(period_releases)
-        
-        for release_time in period_releases:
-            deadline_time = release_time + task.deadline
-            if deadline_time <= time_range:
-                all_deadlines.add(deadline_time)
-    
-    # Plot each task on its own timeline
-    for i, task in enumerate(tasks):
-        y_pos = len(tasks) - i + 1.0
-        y_positions.append(y_pos)
-        
-        # Task label
-        actual_priority = i + 1
-        if algorithm == 'DM':
-            label = f"Task T{i+1}: Period={task.period}, Exec={task.execution_time}, Deadline={task.deadline}, Priority={actual_priority} (DM)"
-        else:
-            label = f"Task T{i+1}: Period={task.period}, Exec={task.execution_time}, Deadline={task.deadline}, Priority={actual_priority} (RM)"
-        task_labels.append(label)
-        
-        # Plot timeline background
-        ax.barh(y_pos, time_range, left=0, height=0.8, 
-                color='white', edgecolor='black', linewidth=1)
-        
-        # Plot task releases and deadlines
-        releases = np.arange(0, time_range + 1, task.period)
-        for release in releases:
-            if release <= time_range:
-                if task.deadline == task.period:
-                    ax.plot([release, release], [y_pos - 0.4, y_pos + 0.4], 
-                           color='red', linewidth=2, solid_capstyle='butt')
-                else:
-                    ax.plot([release, release], [y_pos - 0.4, y_pos + 0.4], 
-                           color='blue', linewidth=2, solid_capstyle='butt')
-                    
-                    deadline_time = release + task.deadline
-                    if deadline_time <= time_range:
-                        ax.plot([deadline_time, deadline_time], [y_pos - 0.4, y_pos + 0.4], 
-                               color='red', linewidth=2, solid_capstyle='butt')
-        
-        # Plot execution blocks with color cycling and pattern support
-        start_time = None
-        for t in range(time_range):
-            if execution_timeline[t] == task:
-                if start_time is None:
-                    start_time = t
-            elif start_time is not None:
-                # Get color for this task (cycle through available colors)
-                color = task_colors[i % len(task_colors)]
-                # Add hatching pattern for tasks beyond the base color set to improve distinction
-                hatch_pattern = None
-                if i >= len(task_colors):
-                    # Use different hatch patterns for tasks that repeat colors
-                    hatch_patterns = ['///', '\\\\\\', '|||', '---', '+++', 'xxx', 'ooo', '...']
-                    hatch_pattern = hatch_patterns[(i // len(task_colors)) % len(hatch_patterns)]
-                
-                ax.barh(y_pos, t - start_time, left=start_time,
-                       height=0.6, color=color, hatch=hatch_pattern,
-                       alpha=0.9, edgecolor='black', linewidth=0.5)
-                start_time = None
-        
-        if start_time is not None:
-            color = task_colors[i % len(task_colors)]
-            hatch_pattern = None
-            if i >= len(task_colors):
-                hatch_patterns = ['///', '\\\\\\', '|||', '---', '+++', 'xxx', 'ooo', '...']
-                hatch_pattern = hatch_patterns[(i // len(task_colors)) % len(hatch_patterns)]
-            
-            ax.barh(y_pos, time_range - start_time, left=start_time,
-                   height=0.6, color=color, hatch=hatch_pattern,
-                   alpha=0.9, edgecolor='black', linewidth=0.5)
-    
-    # Add processor timeline
-    proc_y_pos = 0.5
-    ax.barh(proc_y_pos, time_range, left=0, height=0.8, 
-            color='lightgray', edgecolor='black', linewidth=1)
-    
-    # Create processor execution timeline with improved color distinction
-    for t in range(time_range):
-        if execution_timeline[t] is not None:
-            task_idx = tasks.index(execution_timeline[t])
-            color = task_colors[task_idx % len(task_colors)]
-            hatch_pattern = None
-            if task_idx >= len(task_colors):
-                hatch_patterns = ['///', '\\\\\\', '|||', '---', '+++', 'xxx', 'ooo', '...']
-                hatch_pattern = hatch_patterns[(task_idx // len(task_colors)) % len(hatch_patterns)]
-            
-            ax.barh(proc_y_pos, 1, left=t, height=0.6, 
-                   color=color, hatch=hatch_pattern,
-                   alpha=0.9, edgecolor='black', linewidth=0.3)
-    
-    # Customize plot
-    ax.set_title(title, fontsize=14, fontweight='bold')
-    ax.set_xlabel('Time', fontsize=12)
-    ax.set_ylabel('')
-    
-    # Position labels at top
-    top_y_position = len(tasks) + 2.5
-    label_positions = [top_y_position + (i * 0.25) for i in range(len(task_labels))] + [top_y_position + (len(task_labels) * 0.25)]
-    all_labels = task_labels + [f"Processor: {algorithm}_PROTOCOL, PREEMPTIVE"]
-    ax.set_yticks(label_positions)
-    ax.set_yticklabels(all_labels, fontsize=9, ha='left', va='bottom')
-    
-    # Set limits and grid with adaptive tick spacing
-    ax.set_xlim(0, time_range)
-    ax.set_ylim(0, len(tasks) + 3.5)
-    
-    # Create adaptive time ticks to prevent overlapping labels
-    if time_range <= 30:
-        tick_interval = 2
-    elif time_range <= 60:
-        tick_interval = 4
-    elif time_range <= 120:
-        tick_interval = 6
-    elif time_range <= 240:
-        tick_interval = 10
-    else:
-        tick_interval = max(10, time_range // 20)
-    
-    # Generate ticks with intelligent spacing
-    regular_ticks = np.arange(0, time_range + 1, tick_interval)
-    period_ticks = sorted(list(all_periods))
-    deadline_ticks = sorted(list(all_deadlines))
-    
-    # Combine and filter ticks
-    important_ticks = set(period_ticks) | set(deadline_ticks)
-    all_ticks = sorted(list(set(regular_ticks) | important_ticks))
-    
-    # Filter for readability
-    filtered_ticks = []
-    min_spacing = max(3, time_range // 30)
-    
-    for tick in all_ticks:
-        if tick in important_ticks:
-            if not filtered_ticks or abs(tick - filtered_ticks[-1]) >= min_spacing:
-                filtered_ticks.append(tick)
-            elif tick == 0 or tick == time_range:
-                filtered_ticks.append(tick)
-        else:
-            if not filtered_ticks or min([abs(tick - existing) for existing in filtered_ticks]) >= min_spacing:
-                filtered_ticks.append(tick)
-    
-    # Limit total number of ticks
-    if len(filtered_ticks) > 25:
-        step = len(filtered_ticks) // 20
-        final_ticks = []
-        for i, tick in enumerate(filtered_ticks):
-            if i % step == 0 or tick in important_ticks or tick == 0 or tick == time_range:
-                final_ticks.append(tick)
-        filtered_ticks = sorted(list(set(final_ticks)))
-    
-    ax.set_xticks(filtered_ticks)
-    
-    # Color tick labels appropriately
-    tick_labels = []
-    tick_colors = []
-    
-    # Determine period equals deadline set
-    period_equals_deadline = set()
-    for task in tasks:
-        if task.deadline == task.period:
-            period_releases = np.arange(0, time_range + 1, task.period)
-            period_equals_deadline.update(period_releases)
-    
-    for tick in filtered_ticks:
-        tick_labels.append(f"{int(tick)}")
-        
-        if tick in period_equals_deadline:
-            tick_colors.append('red')
-        elif tick in deadline_ticks and tick in period_ticks:
-            tick_colors.append('red')
-        elif tick in deadline_ticks:
-            tick_colors.append('red')
-        elif tick in period_ticks:
-            tick_colors.append('blue')
-        else:
-            tick_colors.append('black')
-    
-    ax.set_xticklabels(tick_labels, fontsize=9, rotation=45 if len(filtered_ticks) > 15 else 0)  # Rotate if many ticks
-    
-    # Color individual tick labels
-    for tick_label, color in zip(ax.get_xticklabels(), tick_colors):
-        tick_label.set_color(color)
-        if color in ['red', 'blue']:
-            tick_label.set_fontweight('bold')
-    
-    ax.grid(True, alpha=0.4, axis='x', which='major', linestyle='-', linewidth=0.5)
-    
-    # Style axes
-    ax.spines['bottom'].set_position(('axes', 0.0))
-    ax.spines['top'].set_visible(False)
-    ax.spines['left'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.xaxis.set_ticks_position('bottom')
+    # Create the plot
+    fig, ax = _create_plot(execution_timeline, tasks_sorted, time_range, title, all_periods, all_deadlines, task_colors, algorithm)
     
     plt.tight_layout()
     plt.show()
@@ -664,8 +440,32 @@ def main():
     plot_rm_schedule(tasks=task_set_3, lcm_cycles=1, filename="task_set_3")
     plot_rm_schedule(tasks=task_set_extended, lcm_cycles=1, filename="task_set_extended")
     
-    # Example of using custom filename
-    # plot_rm_schedule(task_set_1, filename="custom_schedule.png")
+    # Example of using custom output directory and filename
+    # plot_rm_schedule(task_set_1, filename="custom_schedule.png", output_dir="custom_output")
+
+def demo_output_directories():
+    """
+    Demonstrate using different output directories for organized file management.
+    """
+    # Create a simple test task set
+    test_tasks = [
+        rtm.Task(period=6, deadline=5, execution_time=1),
+        rtm.Task(period=10, deadline=9, execution_time=2)
+    ]
+    
+    # Save to default output directory
+    plot_rm_schedule(test_tasks, filename="demo_default")
+    
+    # Save to custom output directory
+    plot_rm_schedule(test_tasks, filename="demo_custom", output_dir="results")
+    
+    # Save with algorithm-specific directory
+    plot_rm_schedule(test_tasks, filename="demo_dm", output_dir="output/deadline_monotonic", algorithm='DM')
+    plot_rm_schedule(test_tasks, filename="demo_rm", output_dir="output/rate_monotonic", algorithm='RM')
+    
+    print("Demo files created in various output directories!")
 
 if __name__ == "__main__":
     main()
+    # Uncomment to run demo
+    # demo_output_directories()
