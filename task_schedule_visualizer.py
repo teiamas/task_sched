@@ -8,7 +8,7 @@ def _generate_schedule_data(tasks, lcm_cycles=1, algorithm='DM'):
     Generate scheduling data and plot elements for both inline and file output functions.
     
     Returns:
-        tuple: (execution_timeline, tasks_sorted, time_range, title, all_periods, all_deadlines, task_colors)
+        tuple: (execution_timeline, tasks_sorted, time_range, title, all_periods, all_deadlines, task_colors, deadline_violations)
     """
     # Calculate LCM of all periods
     lcm = np.lcm.reduce([task.period for task in tasks])
@@ -27,7 +27,10 @@ def _generate_schedule_data(tasks, lcm_cycles=1, algorithm='DM'):
     # Create execution timeline
     execution_timeline = [None] * time_range
     
-    # Track active task instances
+    # Track deadline violations for each time unit
+    deadline_violations = [False] * time_range
+    
+    # Track active task instances with their deadlines
     active_tasks = []
     
     # Simulate schedule
@@ -38,7 +41,8 @@ def _generate_schedule_data(tasks, lcm_cycles=1, algorithm='DM'):
                 active_tasks.append({
                     'task': task,
                     'remaining': task.execution_time,
-                    'release_time': t
+                    'release_time': t,
+                    'absolute_deadline': t + task.deadline  # Absolute deadline for this instance
                 })
         
         # Remove completed tasks
@@ -56,6 +60,11 @@ def _generate_schedule_data(tasks, lcm_cycles=1, algorithm='DM'):
         if active_tasks:
             executing_task = active_tasks[0]
             execution_timeline[t] = executing_task['task']
+            
+            # Check if current execution is past the deadline
+            if t >= executing_task['absolute_deadline']:
+                deadline_violations[t] = True
+            
             executing_task['remaining'] -= 1
     
     # Define an extended color palette for many tasks
@@ -97,9 +106,9 @@ def _generate_schedule_data(tasks, lcm_cycles=1, algorithm='DM'):
             if deadline_time <= time_range:
                 all_deadlines.add(deadline_time)
     
-    return execution_timeline, tasks_sorted, time_range, title, all_periods, all_deadlines, task_colors
+    return execution_timeline, tasks_sorted, time_range, title, all_periods, all_deadlines, task_colors, deadline_violations
 
-def _create_plot(execution_timeline, tasks, time_range, title, all_periods, all_deadlines, task_colors, algorithm='DM'):
+def _create_plot(execution_timeline, tasks, time_range, title, all_periods, all_deadlines, task_colors, deadline_violations, algorithm='DM'):
     """
     Create the actual matplotlib plot with all the visualization elements.
     
@@ -166,10 +175,15 @@ def _create_plot(execution_timeline, tasks, time_range, title, all_periods, all_
                     hatch_patterns = ['///', '\\\\\\', '|||', '---', '+++', 'xxx', 'ooo', '...']
                     hatch_pattern = hatch_patterns[(i // len(task_colors)) % len(hatch_patterns)]
                 
+                # Check if any execution in this block violates deadline
+                has_deadline_violation = any(deadline_violations[time_slot] for time_slot in range(start_time, t))
+                edge_color = 'red' if has_deadline_violation else 'black'
+                line_width = 2.0 if has_deadline_violation else 0.5
+                
                 # Execution block
                 ax.barh(y_pos, t - start_time, left=start_time,
                        height=0.6, color=color, hatch=hatch_pattern,
-                       alpha=0.9, edgecolor='black', linewidth=0.5)
+                       alpha=0.9, edgecolor=edge_color, linewidth=line_width)
                 start_time = None
         
         # Handle case where task runs until the end
@@ -180,9 +194,14 @@ def _create_plot(execution_timeline, tasks, time_range, title, all_periods, all_
                 hatch_patterns = ['///', '\\\\\\', '|||', '---', '+++', 'xxx', 'ooo', '...']
                 hatch_pattern = hatch_patterns[(i // len(task_colors)) % len(hatch_patterns)]
             
+            # Check if any execution in this final block violates deadline
+            has_deadline_violation = any(deadline_violations[time_slot] for time_slot in range(start_time, time_range))
+            edge_color = 'red' if has_deadline_violation else 'black'
+            line_width = 2.0 if has_deadline_violation else 0.5
+            
             ax.barh(y_pos, time_range - start_time, left=start_time,
                    height=0.6, color=color, hatch=hatch_pattern,
-                   alpha=0.9, edgecolor='black', linewidth=0.5)
+                   alpha=0.9, edgecolor=edge_color, linewidth=line_width)
     
     # Add processor timeline at bottom
     proc_y_pos = 0.5
@@ -204,7 +223,9 @@ def _create_plot(execution_timeline, tasks, time_range, title, all_periods, all_
                    alpha=0.9, edgecolor='black', linewidth=0.3)
     
     # Customize the plot
-    ax.set_title(title, fontsize=14, fontweight='bold')
+    has_violations = any(deadline_violations)
+    violation_note = " (Red borders indicate deadline violations)" if has_violations else ""
+    ax.set_title(title + violation_note, fontsize=14, fontweight='bold')
     ax.set_xlabel('Time', fontsize=12)
     ax.set_ylabel('')
     
@@ -346,10 +367,10 @@ def plot_rm_schedule(tasks, lcm_cycles=1, filename=None, algorithm='DM', output_
     full_path = os.path.join(output_dir, filename)
     
     # Generate scheduling data
-    execution_timeline, tasks_sorted, time_range, title, all_periods, all_deadlines, task_colors = _generate_schedule_data(tasks, lcm_cycles, algorithm)
+    execution_timeline, tasks_sorted, time_range, title, all_periods, all_deadlines, task_colors, deadline_violations = _generate_schedule_data(tasks, lcm_cycles, algorithm)
     
     # Create the plot
-    fig, ax = _create_plot(execution_timeline, tasks_sorted, time_range, title, all_periods, all_deadlines, task_colors, algorithm)
+    fig, ax = _create_plot(execution_timeline, tasks_sorted, time_range, title, all_periods, all_deadlines, task_colors, deadline_violations, algorithm)
     
     plt.tight_layout()
     plt.savefig(full_path, dpi=150, bbox_inches='tight')
@@ -369,10 +390,10 @@ def plot_rm_schedule_inline(tasks, lcm_cycles=1, algorithm='DM'):
     plt.close('all')
     
     # Generate scheduling data
-    execution_timeline, tasks_sorted, time_range, title, all_periods, all_deadlines, task_colors = _generate_schedule_data(tasks, lcm_cycles, algorithm)
+    execution_timeline, tasks_sorted, time_range, title, all_periods, all_deadlines, task_colors, deadline_violations = _generate_schedule_data(tasks, lcm_cycles, algorithm)
     
     # Create the plot
-    fig, ax = _create_plot(execution_timeline, tasks_sorted, time_range, title, all_periods, all_deadlines, task_colors, algorithm)
+    fig, ax = _create_plot(execution_timeline, tasks_sorted, time_range, title, all_periods, all_deadlines, task_colors, deadline_violations, algorithm)
     
     plt.tight_layout()
     plt.show()
@@ -435,10 +456,19 @@ def main():
         rtm.Task(period=24, deadline=22, execution_time=3)    # Task 6
     ]
     
+    # Task Set 5: Deadline violation case - intentionally unschedulable to test red borders
+    task_set_deadline_violations = [
+        rtm.Task(period=6,  deadline=3,  execution_time=2),   # Very tight deadline
+        rtm.Task(period=8,  deadline=4,  execution_time=3),   # Very tight deadline  
+        rtm.Task(period=12, deadline=6,  execution_time=4)    # Very tight deadline
+    ]
+    # This set has high utilization with very tight deadlines that will cause violations
+    
     plot_rm_schedule(tasks=task_set_1, lcm_cycles=1, filename="task_set_1")  
     plot_rm_schedule(tasks=task_set_2, lcm_cycles=1, filename="task_set_2")  
     plot_rm_schedule(tasks=task_set_3, lcm_cycles=1, filename="task_set_3")
     plot_rm_schedule(tasks=task_set_extended, lcm_cycles=1, filename="task_set_extended")
+    plot_rm_schedule(tasks=task_set_deadline_violations, lcm_cycles=1, filename="task_set_deadline_violations")
     
     # Example of using custom output directory and filename
     # plot_rm_schedule(task_set_1, filename="custom_schedule.png", output_dir="custom_output")
