@@ -177,13 +177,36 @@ def _create_plot(execution_timeline, tasks, time_range, title, all_periods, all_
                 
                 # Check if any execution in this block violates deadline
                 has_deadline_violation = any(deadline_violations[time_slot] for time_slot in range(start_time, t))
-                edge_color = 'red' if has_deadline_violation else 'black'
-                line_width = 2.0 if has_deadline_violation else 0.5
+                
+                # Multiple highlighting methods for deadline violations
+                if has_deadline_violation:
+                    # Method 1: Thick black border with white inner border for high contrast
+                    edge_color = 'black'
+                    line_width = 3.0
+                    
+                    # Method 2: Add diagonal cross-hatch pattern specifically for violations
+                    if hatch_pattern is None:
+                        hatch_pattern = 'xxx'  # Cross-hatch for violations
+                    else:
+                        hatch_pattern = hatch_pattern + 'xxx'  # Combine existing pattern with violation marker
+                    
+                    # Method 3: Reduce alpha slightly to make violation blocks more distinct
+                    alpha_value = 0.8
+                else:
+                    edge_color = 'black'
+                    line_width = 0.5
+                    alpha_value = 0.9
                 
                 # Execution block
                 ax.barh(y_pos, t - start_time, left=start_time,
                        height=0.6, color=color, hatch=hatch_pattern,
-                       alpha=0.9, edgecolor=edge_color, linewidth=line_width)
+                       alpha=alpha_value, edgecolor=edge_color, linewidth=line_width)
+                
+                # Method 4: Add a red warning stripe overlay for deadline violations
+                if has_deadline_violation:
+                    # Add thin red stripe at the top of the execution block
+                    ax.barh(y_pos + 0.25, t - start_time, left=start_time,
+                           height=0.1, color='red', alpha=0.9, edgecolor='darkred', linewidth=1)
                 start_time = None
         
         # Handle case where task runs until the end
@@ -196,12 +219,35 @@ def _create_plot(execution_timeline, tasks, time_range, title, all_periods, all_
             
             # Check if any execution in this final block violates deadline
             has_deadline_violation = any(deadline_violations[time_slot] for time_slot in range(start_time, time_range))
-            edge_color = 'red' if has_deadline_violation else 'black'
-            line_width = 2.0 if has_deadline_violation else 0.5
+            
+            # Multiple highlighting methods for deadline violations
+            if has_deadline_violation:
+                # Method 1: Thick black border with white inner border for high contrast
+                edge_color = 'black'
+                line_width = 3.0
+                
+                # Method 2: Add diagonal cross-hatch pattern specifically for violations
+                if hatch_pattern is None:
+                    hatch_pattern = 'xxx'  # Cross-hatch for violations
+                else:
+                    hatch_pattern = hatch_pattern + 'xxx'  # Combine existing pattern with violation marker
+                
+                # Method 3: Reduce alpha slightly to make violation blocks more distinct
+                alpha_value = 0.8
+            else:
+                edge_color = 'black'
+                line_width = 0.5
+                alpha_value = 0.9
             
             ax.barh(y_pos, time_range - start_time, left=start_time,
                    height=0.6, color=color, hatch=hatch_pattern,
-                   alpha=0.9, edgecolor=edge_color, linewidth=line_width)
+                   alpha=alpha_value, edgecolor=edge_color, linewidth=line_width)
+            
+            # Method 4: Add a red warning stripe overlay for deadline violations
+            if has_deadline_violation:
+                # Add thin red stripe at the top of the execution block
+                ax.barh(y_pos + 0.25, time_range - start_time, left=start_time,
+                       height=0.1, color='red', alpha=0.9, edgecolor='darkred', linewidth=1)
     
     # Add processor timeline at bottom
     proc_y_pos = 0.5
@@ -224,7 +270,7 @@ def _create_plot(execution_timeline, tasks, time_range, title, all_periods, all_
     
     # Customize the plot
     has_violations = any(deadline_violations)
-    violation_note = " (Red borders indicate deadline violations)" if has_violations else ""
+    violation_note = " (Cross-hatch pattern + red stripe + thick border = deadline violations)" if has_violations else ""
     ax.set_title(title + violation_note, fontsize=14, fontweight='bold')
     ax.set_xlabel('Time', fontsize=12)
     ax.set_ylabel('')

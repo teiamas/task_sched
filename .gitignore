@@ -60,6 +60,7 @@ Thumbs.db
 # Project specific
 output/
 test_output/
+enhanced_test/
 task_set_*
 rm_schedule*.png
 
