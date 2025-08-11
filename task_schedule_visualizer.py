@@ -175,7 +175,7 @@ def _create_plot(execution_timeline, tasks, time_range, title, all_periods, all_
                     hatch_patterns = ['///', '\\\\\\', '|||', '---', '+++', 'xxx', 'ooo', '...']
                     hatch_pattern = hatch_patterns[(i // len(task_colors)) % len(hatch_patterns)]
                 
-                # Split execution block into violation and non-violation segments
+                # Split execution block into violation and non-violation segments with precise boundaries
                 current_pos = start_time
                 while current_pos < t:
                     # Find the next segment boundary (violation status change)
@@ -188,6 +188,10 @@ def _create_plot(execution_timeline, tasks, time_range, title, all_periods, all_
                     
                     segment_end = current_pos
                     segment_length = segment_end - segment_start
+                    
+                    # Ensure we don't create zero-length segments
+                    if segment_length <= 0:
+                        continue
                     
                     # Configure appearance based on violation status
                     if has_violation:
@@ -206,12 +210,12 @@ def _create_plot(execution_timeline, tasks, time_range, title, all_periods, all_
                         violation_hatch_pattern = hatch_pattern
                         alpha_value = 0.9
                     
-                    # Draw the segment
+                    # Draw the segment with precise boundaries
                     ax.barh(y_pos, segment_length, left=segment_start,
                            height=0.6, color=color, hatch=violation_hatch_pattern,
                            alpha=alpha_value, edgecolor=edge_color, linewidth=line_width)
                     
-                    # Method 4: Add a red warning stripe overlay for deadline violations
+                    # Method 4: Add a red warning stripe overlay for deadline violations (precise positioning)
                     if has_violation:
                         # Add thin red stripe at the top of the execution block
                         ax.barh(y_pos + 0.25, segment_length, left=segment_start,
