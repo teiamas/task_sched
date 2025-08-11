@@ -175,38 +175,48 @@ def _create_plot(execution_timeline, tasks, time_range, title, all_periods, all_
                     hatch_patterns = ['///', '\\\\\\', '|||', '---', '+++', 'xxx', 'ooo', '...']
                     hatch_pattern = hatch_patterns[(i // len(task_colors)) % len(hatch_patterns)]
                 
-                # Check if any execution in this block violates deadline
-                has_deadline_violation = any(deadline_violations[time_slot] for time_slot in range(start_time, t))
-                
-                # Multiple highlighting methods for deadline violations
-                if has_deadline_violation:
-                    # Method 1: Thick black border with white inner border for high contrast
-                    edge_color = 'black'
-                    line_width = 3.0
+                # Split execution block into violation and non-violation segments
+                current_pos = start_time
+                while current_pos < t:
+                    # Find the next segment boundary (violation status change)
+                    segment_start = current_pos
+                    has_violation = deadline_violations[current_pos]
                     
-                    # Method 2: Add diagonal cross-hatch pattern specifically for violations
-                    if hatch_pattern is None:
-                        hatch_pattern = 'xxx'  # Cross-hatch for violations
+                    # Extend segment while violation status remains the same
+                    while current_pos < t and deadline_violations[current_pos] == has_violation:
+                        current_pos += 1
+                    
+                    segment_end = current_pos
+                    segment_length = segment_end - segment_start
+                    
+                    # Configure appearance based on violation status
+                    if has_violation:
+                        # Method 1: Thick black border for high contrast
+                        edge_color = 'black'
+                        line_width = 3.0
+                        
+                        # Method 2: Add diagonal cross-hatch pattern specifically for violations
+                        violation_hatch_pattern = hatch_pattern + 'xxx' if hatch_pattern else 'xxx'
+                        
+                        # Method 3: Reduce alpha slightly to make violation blocks more distinct
+                        alpha_value = 0.8
                     else:
-                        hatch_pattern = hatch_pattern + 'xxx'  # Combine existing pattern with violation marker
+                        edge_color = 'black'
+                        line_width = 0.5
+                        violation_hatch_pattern = hatch_pattern
+                        alpha_value = 0.9
                     
-                    # Method 3: Reduce alpha slightly to make violation blocks more distinct
-                    alpha_value = 0.8
-                else:
-                    edge_color = 'black'
-                    line_width = 0.5
-                    alpha_value = 0.9
+                    # Draw the segment
+                    ax.barh(y_pos, segment_length, left=segment_start,
+                           height=0.6, color=color, hatch=violation_hatch_pattern,
+                           alpha=alpha_value, edgecolor=edge_color, linewidth=line_width)
+                    
+                    # Method 4: Add a red warning stripe overlay for deadline violations
+                    if has_violation:
+                        # Add thin red stripe at the top of the execution block
+                        ax.barh(y_pos + 0.25, segment_length, left=segment_start,
+                               height=0.1, color='red', alpha=0.9, edgecolor='darkred', linewidth=1)
                 
-                # Execution block
-                ax.barh(y_pos, t - start_time, left=start_time,
-                       height=0.6, color=color, hatch=hatch_pattern,
-                       alpha=alpha_value, edgecolor=edge_color, linewidth=line_width)
-                
-                # Method 4: Add a red warning stripe overlay for deadline violations
-                if has_deadline_violation:
-                    # Add thin red stripe at the top of the execution block
-                    ax.barh(y_pos + 0.25, t - start_time, left=start_time,
-                           height=0.1, color='red', alpha=0.9, edgecolor='darkred', linewidth=1)
                 start_time = None
         
         # Handle case where task runs until the end
@@ -217,37 +227,47 @@ def _create_plot(execution_timeline, tasks, time_range, title, all_periods, all_
                 hatch_patterns = ['///', '\\\\\\', '|||', '---', '+++', 'xxx', 'ooo', '...']
                 hatch_pattern = hatch_patterns[(i // len(task_colors)) % len(hatch_patterns)]
             
-            # Check if any execution in this final block violates deadline
-            has_deadline_violation = any(deadline_violations[time_slot] for time_slot in range(start_time, time_range))
-            
-            # Multiple highlighting methods for deadline violations
-            if has_deadline_violation:
-                # Method 1: Thick black border with white inner border for high contrast
-                edge_color = 'black'
-                line_width = 3.0
+            # Split final execution block into violation and non-violation segments
+            current_pos = start_time
+            while current_pos < time_range:
+                # Find the next segment boundary (violation status change)
+                segment_start = current_pos
+                has_violation = deadline_violations[current_pos]
                 
-                # Method 2: Add diagonal cross-hatch pattern specifically for violations
-                if hatch_pattern is None:
-                    hatch_pattern = 'xxx'  # Cross-hatch for violations
+                # Extend segment while violation status remains the same
+                while current_pos < time_range and deadline_violations[current_pos] == has_violation:
+                    current_pos += 1
+                
+                segment_end = current_pos
+                segment_length = segment_end - segment_start
+                
+                # Configure appearance based on violation status
+                if has_violation:
+                    # Method 1: Thick black border for high contrast
+                    edge_color = 'black'
+                    line_width = 3.0
+                    
+                    # Method 2: Add diagonal cross-hatch pattern specifically for violations
+                    violation_hatch_pattern = hatch_pattern + 'xxx' if hatch_pattern else 'xxx'
+                    
+                    # Method 3: Reduce alpha slightly to make violation blocks more distinct
+                    alpha_value = 0.8
                 else:
-                    hatch_pattern = hatch_pattern + 'xxx'  # Combine existing pattern with violation marker
+                    edge_color = 'black'
+                    line_width = 0.5
+                    violation_hatch_pattern = hatch_pattern
+                    alpha_value = 0.9
                 
-                # Method 3: Reduce alpha slightly to make violation blocks more distinct
-                alpha_value = 0.8
-            else:
-                edge_color = 'black'
-                line_width = 0.5
-                alpha_value = 0.9
-            
-            ax.barh(y_pos, time_range - start_time, left=start_time,
-                   height=0.6, color=color, hatch=hatch_pattern,
-                   alpha=alpha_value, edgecolor=edge_color, linewidth=line_width)
-            
-            # Method 4: Add a red warning stripe overlay for deadline violations
-            if has_deadline_violation:
-                # Add thin red stripe at the top of the execution block
-                ax.barh(y_pos + 0.25, time_range - start_time, left=start_time,
-                       height=0.1, color='red', alpha=0.9, edgecolor='darkred', linewidth=1)
+                # Draw the segment
+                ax.barh(y_pos, segment_length, left=segment_start,
+                       height=0.6, color=color, hatch=violation_hatch_pattern,
+                       alpha=alpha_value, edgecolor=edge_color, linewidth=line_width)
+                
+                # Method 4: Add a red warning stripe overlay for deadline violations
+                if has_violation:
+                    # Add thin red stripe at the top of the execution block
+                    ax.barh(y_pos + 0.25, segment_length, left=segment_start,
+                           height=0.1, color='red', alpha=0.9, edgecolor='darkred', linewidth=1)
     
     # Add processor timeline at bottom
     proc_y_pos = 0.5
@@ -276,7 +296,7 @@ def _create_plot(execution_timeline, tasks, time_range, title, all_periods, all_
     ax.set_ylabel('')
     
     # Position y-axis labels at the top of the plot
-    top_y_position = len(tasks) + 2.5  # Position at top of plot
+    top_y_position = len(tasks) + 1.0  # Position at top of plot
     label_positions = [top_y_position + (i * 0.25) for i in range(len(task_labels))] + [top_y_position + (len(task_labels) * 0.25)]
     all_labels = task_labels + [f"Processor: {algorithm}_PROTOCOL, PREEMPTIVE"]
     ax.set_yticks(label_positions)
@@ -374,7 +394,8 @@ def _create_plot(execution_timeline, tasks, time_range, title, all_periods, all_
             tick_label.set_fontweight('bold')
     
     # Add slightly more visible grid
-    ax.grid(True, alpha=0.4, axis='x', which='major', linestyle='-', linewidth=0.5)
+    ax.grid(True, alpha=0.6, axis='x', which='major', linestyle='-', linewidth=0.8)
+    ax.grid(True, alpha=0.3, axis='y', which='major', linestyle='--', linewidth=0.5)
     
     # Position x-axis at the bottom like in reference images
     ax.spines['bottom'].set_position(('axes', 0.0))
