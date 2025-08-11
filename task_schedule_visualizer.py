@@ -295,16 +295,17 @@ def _create_plot(execution_timeline, tasks, time_range, title, all_periods, all_
     ax.set_xlabel('Time', fontsize=12)
     ax.set_ylabel('')
     
-    # Position y-axis labels at the top of the plot
-    top_y_position = len(tasks) + 1.0  # Position at top of plot
-    label_positions = [top_y_position + (i * 0.25) for i in range(len(task_labels))] + [top_y_position + (len(task_labels) * 0.25)]
+    # Position y-axis labels with proper spacing from title
+    top_y_position = len(tasks) + 1.5  # Move labels lower to avoid title overlap
+    label_spacing = 0.3  # Increase spacing between labels
+    label_positions = [top_y_position + (i * label_spacing) for i in range(len(task_labels))] + [top_y_position + (len(task_labels) * label_spacing)]
     all_labels = task_labels + [f"Processor: {algorithm}_PROTOCOL, PREEMPTIVE"]
     ax.set_yticks(label_positions)
     ax.set_yticklabels(all_labels, fontsize=9, ha='left', va='bottom')
     
-    # Set axis limits with space for top labels
+    # Set axis limits with more space for top labels  
     ax.set_xlim(0, time_range)
-    ax.set_ylim(0, len(tasks) + 3.5)
+    ax.set_ylim(0, len(tasks) + 4.5)  # Increased upper limit for better spacing
     
     # Create custom time ticks with better spacing to avoid overlap
     # Adaptive tick interval based on time range and figure width
